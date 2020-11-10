@@ -3,7 +3,10 @@ package test;
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.mllib.random.RandomRDDs;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+
+import java.util.List;
 
 public class Main {
     public static void main(String[] args) {
@@ -15,23 +18,20 @@ public class Main {
         var spark = SparkSession.builder().config(conf).getOrCreate();
 
 
-        var rdd = RandomRDDs.normalJavaRDD(new JavaSparkContext(spark.sparkContext()), 1)
-                .map(d -> new DemoClass(d.toString(), DemoEnum.ENUM_VALUE));
 
+        var data = List.of(new DemoClass("data", DemoEnum.ENUM_VALUE));
 
-        var dataFrame = spark.createDataFrame(rdd, DemoClass.class);
+        var dataFrame = spark.createDataFrame(data, DemoClass.class);
 
-        /* Enum values take the string value on the schema
-         root
-         |-- enumValue: string (nullable = true)
-         |-- stringValue: string (nullable = true)
-         */
-        System.out.println("Printing schema");
-        dataFrame.printSchema();
+        dataFrame.createOrReplaceTempView("test");
 
-        // This will fail because catalyst is unable to convert enums to their string representation
-        // java.lang.IllegalArgumentException: The value (ENUM_VALUE) of the type (test.DemoEnum) cannot be converted to the string type
-        dataFrame.show();
+        var rows = spark.sql("select enumValue from test").collectAsList();
+        String enumValue = rows.get(0).getAs("enumValue");
+        if(enumValue.equals("ENUM_VALUE")) {
+            System.out.println("All good");
+        } else {
+            System.out.println("Enum not handled properly");
+        }
 
     }
 }
